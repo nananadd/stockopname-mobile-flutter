@@ -3,11 +3,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // PENTING: Jika menjalankan Flutter di Emulator Android, 
+  // Jika menjalankan Flutter di Emulator Android, 
   // localhost (127.0.0.1) harus diganti menjadi 10.0.2.2 agar bisa menembak ke komputer Windows.
   // Jika menggunakan HP asli, ganti dengan IP Address WiFi laptopmu (contoh: 192.168.1.5)
   // static const String baseUrl = 'http://10.0.2.2:8000/api'; // Untuk Android Studio
-  static const String baseUrl = 'http://192.168.1.7:8000/api'; //HP
+  static const String baseUrl = 'http://192.168.1.11:8000/api'; //HP
 
   // Kunci rahasia untuk menyimpan token di brankas HP
   static const String _tokenKey = 'jwt_token';

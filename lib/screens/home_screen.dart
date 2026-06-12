@@ -22,6 +22,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _userName = 'Memuat...';
 
+  // State untuk Bottom Navigation Bar
+  int _selectedIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -33,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       // Mengambil nama, jika kosong maka default ke 'Staf Gudang'
-      _userName = prefs.getString('user_name') ?? 'Staf Gudang'; 
+      _userName = prefs.getString('user_name') ?? 'Staf Gudang';
     });
   }
 
@@ -44,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Fungsi untuk memanggil API saat layar pertama kali dibuka
   Future<void> _fetchTasks() async {
     setState(() => isLoading = true);
-    
     final tasks = await ApiService().getMyTasks();
     
     setState(() {
@@ -53,137 +55,75 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-@override
+  // Fungsi saat menu bawah diklik
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // Daftar layar yang akan ditampilkan sesuai menu yang diklik
+    final List<Widget> pages = [
+      _buildHomeTab(),                 // Tab 0: Beranda
+      const SyncScreen(),              // Tab 1: Sinkronisasi
+      const HistoryScreen(),           // Tab 2: Riwayat
+      const ChangePasswordScreen(),    // Tab 3: Akun/Password
+    ];
+
     return Scaffold(
+        appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(0),
+        child: AppBar(
+          backgroundColor: sigmaBlack,
+          elevation: 0,
+        ),
+      ),
+
       backgroundColor: bgLight,
-      body: SafeArea(
-        // 1. COLUMN UTAMA PEMISAH HEADER DAN KONTEN
-        child: Column(
-          children: [
-            
-            // 2. HEADER STICKY (Akan tetap menempel di atas)
-            _buildCustomHeader(context), 
-            
-            // 3. AREA KONTEN (Bisa di-scroll dan di-pull-to-refresh)
-            Expanded(
-              child: RefreshIndicator(
-                color: sigmaMagenta,
-                onRefresh: _fetchTasks,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 24), // Spasi setelah header
-                      
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // HERO CARD
-                            const Text(
-                              'Aksi Utama',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildHeroCard(context),
-                            
-                            const SizedBox(height: 32),
-                            
-                            // DAFTAR TUGAS HARI INI
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Tugas Saya Hari Ini',
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
-                                ),
-                                // Badge jumlah tugas
-                                if (!isLoading && myTasks.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: sigmaMagenta,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      '${myTasks.length}',
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                                    ),
-                                  )
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            
-                            // Menampilkan List Tugas atau Loading
-                            _buildTaskList(),
-
-                            const SizedBox(height: 32),
-                            
-                            const Text(
-                              'Menu Administratif',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
-                            ),
-                            const SizedBox(height: 12),
-                            
-                            // ROW 1: Tombol sekunder
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildSecondaryMenu(
-                                    context,
-                                    icon: Icons.sync,
-                                    title: 'Sinkronisasi\nOffline',
-                                    color: Colors.blueAccent,
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SyncScreen())),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: _buildSecondaryMenu(
-                                    context,
-                                    icon: Icons.history,
-                                    title: 'Riwayat\nHitungan',
-                                    color: Colors.teal,
-                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen())),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            
-                            const SizedBox(height: 16), // Spasi antar baris
-
-                            // ROW 2: Tombol Keamanan Akun
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildSecondaryMenu(
-                                    context,
-                                    icon: Icons.security,
-                                    title: 'Keamanan\nAkun',
-                                    color: sigmaMagenta,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
-                                      );
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(child: const SizedBox.shrink()), 
-                              ],
-                            ),
-                            const SizedBox(height: 30),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      
+      // Konten layar akan berubah sesuai index menu bawah
+      body: pages[_selectedIndex],
+      
+      // BOTTOM NAVIGATION BAR (Gaya UI Modern)
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          backgroundColor: Colors.white,
+          selectedItemColor: sigmaMagenta,
+          unselectedItemColor: Colors.grey.shade400,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed, // Mencegah animasi aneh jika tab > 3
+          elevation: 0,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 11),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_filled),
+              label: 'Beranda',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.sync),
+              label: 'Sinkronisasi',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history),
+              label: 'Riwayat',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.security),
+              label: 'Akun',
             ),
           ],
         ),
@@ -191,7 +131,91 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // WIDGET TAMPILAN TUGAS
+  // ========================================================
+  // WIDGET KHUSUS TAB BERANDA (Tampilan Home Asli)
+  // ========================================================
+  Widget _buildHomeTab() {
+    return SafeArea(
+      child: Column(
+        children: [
+          // HEADER STICKY (Akan tetap menempel di atas)
+          _buildCustomHeader(context),
+          
+          // AREA KONTEN (Bisa di-scroll dan di-pull-to-refresh)
+          Expanded(
+            child: RefreshIndicator(
+              color: sigmaMagenta,
+              onRefresh: _fetchTasks,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24), // Spasi setelah header
+                    
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // HERO CARD
+                          const Text(
+                            'Aksi Utama',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildHeroCard(context),
+                          
+                          const SizedBox(height: 32),
+
+                          _buildProgressDashboard(),
+
+                          if (!isLoading && myTasks.isNotEmpty) 
+                          const SizedBox(height: 32),
+                          
+                          // DAFTAR TUGAS HARI INI
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Tugas Saya Hari Ini',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
+                              ),
+                              // Badge jumlah tugas
+                              if (!isLoading && myTasks.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: sigmaMagenta,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${myTasks.length}',
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                                  ),
+                                )
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Menampilkan List Tugas atau Loading
+                          _buildTaskList(),
+
+                          const SizedBox(height: 30),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // WIDGET TAMPILAN TUGAS (Tidak Diubah)
   Widget _buildTaskList() {
     if (isLoading) {
       return const Center(
@@ -223,116 +247,105 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // Jika ada tugas, buat list card
-        return Column(
-          children: myTasks.map((task) {
-            // Tangkap data dari JSON Laravel
-            final rackCode = task['rack']?['code'] ?? 'Rak Tidak Diketahui';
-            final scheduleDate = task['scheduled_at'] ?? '-';
-            
-            // --- KODE BARU: Tangkap Status dan Catatan ---
-            final status = task['status'] ?? 'draft'; 
-            final supervisorNote = task['notes'];
-            final isRecount = status == 'recount';
-            // ---------------------------------------------
+    return Column(
+      children: myTasks.map((task) {
+        final rackCode = task['rack']?['code'] ?? 'Rak Tidak Diketahui';
+        final scheduleDate = task['scheduled_at'] ?? '-';
+        final status = task['status'] ?? 'draft';
+        final supervisorNote = task['notes'];
+        final isRecount = status == 'recount';
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isRecount ? Colors.red.shade200 : Colors.grey.shade200),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))
-                ]
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isRecount ? Colors.red.shade200 : Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))
+            ]
+          ),
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isRecount ? Colors.red.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    isRecount ? Icons.warning_rounded : Icons.assignment_late,
+                    color: isRecount ? Colors.red : Colors.orange
+                  ),
+                ),
+                title: Text(
+                  rackCode,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+                ),
+                subtitle: Text(
+                  isRecount ? 'Tugas Hitung Ulang!' : 'Jadwal: $scheduleDate',
+                  style: TextStyle(fontSize: 12, color: isRecount ? Colors.red : Colors.grey, fontWeight: isRecount ? FontWeight.bold : FontWeight.normal)
+                ),
+                trailing: ElevatedButton(
+                  onPressed: () {
+                    final String targetRackId = task['rack_id'].toString();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CycleCountScreen(initialRackId: targetRackId)
+                      )
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isRecount ? Colors.red : sigmaMagenta,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Hitung'),
+                ),
               ),
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        // Jika recount, iconnya jadi warna merah
-                        color: isRecount ? Colors.red.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        isRecount ? Icons.warning_rounded : Icons.assignment_late, 
-                        color: isRecount ? Colors.red : Colors.orange
-                      ),
-                    ),
-                    title: Text(
-                      rackCode, 
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-                    ),
-                    subtitle: Text(
-                      isRecount ? 'Tugas Hitung Ulang!' : 'Jadwal: $scheduleDate', 
-                      style: TextStyle(fontSize: 12, color: isRecount ? Colors.red : Colors.grey, fontWeight: isRecount ? FontWeight.bold : FontWeight.normal)
-                    ),
-                    trailing: ElevatedButton(
-                      onPressed: () {
-                        // AMBIL ID RAK DARI JSON TASK
-                        final String targetRackId = task['rack_id'].toString();
-                        
-                        // KIRIM ID RAK TERSEBUT KE HALAMAN CYCLE COUNT
-                        Navigator.push(
-                          context, 
-                          MaterialPageRoute(
-                            builder: (context) => CycleCountScreen(initialRackId: targetRackId)
-                          )
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isRecount ? Colors.red : sigmaMagenta,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Hitung'),
+              if (isRecount && supervisorNote != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16)
                     ),
                   ),
-                  
-                  // --- KODE BARU: KOTAK CATATAN SUPERVISOR ---
-                  if (isRecount && supervisorNote != null)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50, // Latar belakang merah muda
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(16), 
-                          bottomRight: Radius.circular(16)
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.chat_bubble_outline, color: Colors.red, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Pesan Supervisor:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
+                            const SizedBox(height: 2),
+                            Text(
+                              supervisorNote.toString(),
+                              style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontStyle: FontStyle.italic)
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.chat_bubble_outline, color: Colors.red, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('Pesan Supervisor:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  supervisorNote.toString(), 
-                                  style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontStyle: FontStyle.italic)
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // -------------------------------------------
-                ],
-              ),
-            );
-          }).toList(),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         );
+      }).toList(),
+    );
   }
 
-
+  // HEADER STICKY (Tidak Diubah)
   Widget _buildCustomHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24.0),
@@ -346,7 +359,6 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Bagian Teks Kiri
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Halo, $_userName!', // Variabel ini sekarang pasti terdeteksi
+                  'Halo, $_userName!',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -367,8 +379,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-          
-          // Tombol Logout di Kanan
           Container(
             decoration: BoxDecoration(
               color: sigmaMagenta.withOpacity(0.2),
@@ -377,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: IconButton(
               icon: Icon(Icons.logout, color: sigmaMagenta),
               tooltip: 'Keluar Aplikasi',
-              onPressed: () => _prosesLogout(context), // Memanggil fungsi logout
+              onPressed: () => _prosesLogout(context),
             ),
           ),
         ],
@@ -385,9 +395,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Fungsi untuk Keluar dari Aplikasi
+  // FUNGSI LOGOUT (Tidak Diubah)
   Future<void> _prosesLogout(BuildContext context) async {
-    // Munculkan pop-up konfirmasi
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -396,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> {
         content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false), // Batal
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Batal', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
@@ -404,20 +413,18 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: sigmaMagenta,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            onPressed: () => Navigator.pop(context, true), // Yakin Keluar
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('Keluar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     ) ?? false;
 
-    // Jika user klik "Keluar"
     if (confirm) {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.clear(); // Hapus token dan data nama dari memori HP
+      await prefs.clear();
       
       if (mounted) {
-        // Arahkan kembali ke LoginScreen (Garis kuning import akan hilang!)
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -426,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // 2. HERO CARD (Kartu Utama)
+  // HERO CARD (Tidak Diubah)
   Widget _buildHeroCard(BuildContext context) {
     return InkWell(
       onTap: () {
@@ -492,41 +499,115 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 3. MENU SEKUNDER (Untuk Sync & Riwayat)
-  Widget _buildSecondaryMenu(BuildContext context, {required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            )
-          ],
+  // MINI DASHBOARD & PROGRESS TUGAS
+  Widget _buildProgressDashboard() {
+    // Sembunyikan jika masih loading atau tidak ada tugas
+    if (isLoading || myTasks.isEmpty) return const SizedBox.shrink();
+
+    int totalTasks = myTasks.length;
+    
+    // Menghitung otomatis tugas yang sudah selesai (asumsi status 'completed', 'counted', atau 'done')
+    int completedTasks = myTasks.where((task) {
+      String status = task['status'] ?? '';
+      return status == 'completed' || status == 'counted' || status == 'done';
+    }).length;
+    
+    int pendingTasks = totalTasks - completedTasks;
+    double progressValue = totalTasks == 0 ? 0 : completedTasks / totalTasks;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ringkasan Aktivitas',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.1),
-              radius: 28,
-              child: Icon(icon, size: 30, color: color),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-          ],
-        ),
-      ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02), 
+                blurRadius: 10, 
+                offset: const Offset(0, 4)
+              )
+            ]
+          ),
+          child: Column(
+            children: [
+              // Teks Progress dan Persentase
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Progress Hari Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(
+                    '${(progressValue * 100).toInt()}%', 
+                    style: TextStyle(fontWeight: FontWeight.bold, color: sigmaMagenta, fontSize: 16)
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Garis Loading (Progress Bar)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: progressValue,
+                  minHeight: 8,
+                  backgroundColor: Colors.grey.shade200,
+                  valueColor: AlwaysStoppedAnimation<Color>(sigmaMagenta),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Dua Kotak Statistik (Selesai vs Menunggu)
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.green.withOpacity(0.2))
+                      ),
+                      child: Column(
+                        children: [
+                          Text(completedTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+                          const SizedBox(height: 4),
+                          const Text('Selesai', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.orange.withOpacity(0.2))
+                      ),
+                      child: Column(
+                        children: [
+                          Text(pendingTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange)),
+                          const SizedBox(height: 4),
+                          const Text('Menunggu', style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        )
+      ],
     );
   }
 }
