@@ -18,7 +18,7 @@ class _SyncScreenState extends State<SyncScreen> {
   bool _isLoading = false;
   String _statusMessage = 'Pilih aksi sinkronisasi di bawah ini.';
 
-  // Fungsi Pull (Download) yang sudah kita buat sebelumnya
+  // Fungsi Pull (Download)
   Future<void> _startPull() async {
     setState(() {
       _isLoading = true;
@@ -49,7 +49,7 @@ class _SyncScreenState extends State<SyncScreen> {
     }
   }
 
-// FUNGSI : Push (Upload) hasil hitungan ke Laravel (Dengan Error Handling)
+// FUNGSI : Push (Upload) hasil hitungan ke Laravel
   Future<void> _startPush() async {
     setState(() {
       _isLoading = true;
@@ -60,7 +60,7 @@ class _SyncScreenState extends State<SyncScreen> {
       final db = DatabaseHelper.instance;
       final api = ApiService();
 
-      // 1. Ambil data asli (mentah) dari SQLite
+      // Ambil data asli (mentah) dari SQLite
       final rawPendingData = await db.getPendingCycleCounts();
 
       if (rawPendingData.isEmpty) {
@@ -71,33 +71,26 @@ class _SyncScreenState extends State<SyncScreen> {
         return;
       }
 
-      // ============================================================
-      // KODE YANG DITAMBAHKAN: PROSES PEMBERSIHAN ID (Pembungkus Paket)
-      // ============================================================
+      // PROSES BERISHKAN ID 
       List<Map<String, dynamic>> dataUntukDikirim = [];
 
       for (var item in rawPendingData) {
-        // Map dari SQLite itu "read-only", jadi kita harus buat salinannya agar bisa diedit
+        // Map dari SQLite itu "read-only", jadi harus buat salinannya agar bisa diedit
         Map<String, dynamic> cycleData = Map<String, dynamic>.from(item);
         
         // HAPUS ID LOKAL bawaan SQLite agar Laravel tidak menolaknya (422 Invalid ID)
         cycleData.remove('id'); 
-        
-        // Catatan: Jika nanti kamu punya fitur Jadwal dan menyimpan ID Jadwal dari Laravel
-        // di SQLite (misalnya di kolom 'schedule_id'), kamu bisa memasukkannya ke sini:
-        // if (item['schedule_id'] != null) cycleData['id'] = item['schedule_id'];
 
         dataUntukDikirim.add(cycleData);
       }
-      // ============================================================
 
       setState(() => _statusMessage = 'Mengirim ${dataUntukDikirim.length} laporan ke server...');
 
-      // 2. Kirim data yang sudah "dibersihkan" ke Laravel
+      // Kirim data yang sudah "dibersihkan" ke Laravel
       await api.pushCycleCount(dataUntukDikirim);
 
-      // 3. Jika sukses, ubah status di SQLite jadi 'synced'
-      // PENTING: Kita tetap pakai rawPendingData untuk mendapatkan ID lokal SQLite aslinya
+      // Jika sukses, ubah status di SQLite jadi 'synced'
+      // pakai rawPendingData untuk mendapatkan ID lokal SQLite aslinya
       List<int> syncedIds = rawPendingData.map<int>((e) => e['id'] as int).toList();
       await db.markAsSynced(syncedIds);
 
@@ -126,7 +119,7 @@ class _SyncScreenState extends State<SyncScreen> {
           SnackBar(
             content: Text('Gagal: $e'), 
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5), // Ditahan 5 detik biar staf sempat membaca
+            duration: const Duration(seconds: 5), // Ditahan 5 detik biar staf bisa baca
           ),
         );
       }
@@ -185,7 +178,7 @@ class _SyncScreenState extends State<SyncScreen> {
                 else
                   Column(
                     children: [
-                      // TOMBOL DOWNLOAD (Gaya Sekunder)
+                      // TOMBOL DOWNLOAD
                       ElevatedButton.icon(
                         icon: const Icon(Icons.cloud_download_outlined),
                         label: const Text('Download Data Master', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -201,7 +194,7 @@ class _SyncScreenState extends State<SyncScreen> {
                       ),
                       const SizedBox(height: 16),
                       
-                      // TOMBOL UPLOAD (Gaya Utama)
+                      // TOMBOL UPLOAD
                       ElevatedButton.icon(
                         icon: const Icon(Icons.cloud_upload_outlined),
                         label: const Text('Upload Hasil Hitungan', style: TextStyle(fontWeight: FontWeight.bold)),

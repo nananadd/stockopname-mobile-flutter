@@ -44,7 +44,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
 
     // CEK TITIPAN DARI HOME SCREEN
     if (widget.initialRackId != null) {
-      // MENCEGAH CRASH: Cek apakah rak dari jadwal online ADA di database offline HP
+      // Cek apakah rak dari jadwal online ADA di database offline HP
       bool isRackExist = _racks.any((r) => r['id'].toString() == widget.initialRackId);
 
       if (isRackExist) {
@@ -96,7 +96,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       return;
     }
 
-    // --- Pastikan ada minimal 1 barang yang diisi angkanya ---
+    // Pastikan ada minimal 1 barang yang diisi angkanya
     bool hasInput = false;
     for (var controller in _controllers.values) {
       if (controller.text.isNotEmpty) {
@@ -128,7 +128,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
         await db.insert('cycle_count_details', {
           'cycle_count_id': cycleId,
           'item_id': item['id'],
-          // 👇 INI DIA TAMBAHANNYA 👇
           'system_stock_snapshot': item['system_stock'] ?? 0, 
           'physical_stock': int.parse(inputQty),
         });
@@ -141,7 +140,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
   }
 
-  // FUNGSI: Dialog Tambah Barang Nyasar (Misplaced Item)
+  // fungsi Dialog Tambah Barang Nyasar (Misplaced Item)
   Future<void> _showAddMisplacedItemDialog() async {
     TextEditingController searchController = TextEditingController();
     List<Map<String, dynamic>> searchResults = [];
@@ -296,7 +295,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     );
   }
 
-// FUNGSI: Buka Kamera dengan barcode_scan2
+// Fungsi Buka Kamera dengan barcode_scan2
   Future<void> _scanQR() async {
     try {
       var result = await BarcodeScanner.scan();

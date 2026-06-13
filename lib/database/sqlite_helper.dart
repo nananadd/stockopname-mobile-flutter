@@ -88,7 +88,7 @@ class DatabaseHelper {
     final db = await instance.database;
     await db.delete('racks');
     await db.delete('items');
-    await db.delete('item_rack'); // <-- BERSAHKAN JUGA TABEL PIVOT
+    await db.delete('item_rack');
   }
 
   /// Fungsi untuk menyimpan banyak Rak sekaligus
@@ -102,7 +102,7 @@ class DatabaseHelper {
         'qr_code': rack['qr_code'] ?? '',
       }, conflictAlgorithm: ConflictAlgorithm.replace);
 
-      // <-- TANGKAP HUBUNGAN RAK DAN BARANG DARI LARAVEL
+      // TANGKAP HUBUNGAN RAK DAN BARANG DARI LARAVEL
       if (rack['items'] != null) {
         for (var item in rack['items']) {
           batch.insert('item_rack', {
@@ -131,7 +131,7 @@ class DatabaseHelper {
     await batch.commit(noResult: true);
   }
 
-  /// FUNGSI BARU: Ambil Item khusus untuk Rak tertentu saja
+  /// Ambil Item khusus untuk Rak tertentu saja
   Future<List<Map<String, dynamic>>> getItemsByRack(int rackId) async {
     final db = await instance.database;
     return await db.rawQuery('''

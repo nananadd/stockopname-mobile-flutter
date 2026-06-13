@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // Pastikan package intl sudah ada di pubspec.yaml
+import 'package:intl/intl.dart';
 import '../database/sqlite_helper.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -35,8 +35,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _formatDate(String isoString) {
     try {
       final date = DateTime.parse(isoString);
-      // Kalau kamu belum install package intl, ini bisa diganti format manual
-      // Tapi kita pakai cara sederhana bawaan DateTime dulu:
+      // pakai cara sederhana bawaan DateTime dulu
       return '${date.day}-${date.month}-${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return isoString;
@@ -46,10 +45,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgLight, // Background seragam
+      backgroundColor: bgLight, // Background
       appBar: AppBar(
         title: const Text('Riwayat Hitungan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: sigmaBlack, // Header hitam elegan
+        backgroundColor: sigmaBlack, // Header hitam
         foregroundColor: Colors.white,
         elevation: 0,
       ),

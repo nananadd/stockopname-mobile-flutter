@@ -3,16 +3,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Jika menjalankan Flutter di Emulator Android, 
-  // localhost (127.0.0.1) harus diganti menjadi 10.0.2.2 agar bisa menembak ke komputer Windows.
-  // Jika menggunakan HP asli, ganti dengan IP Address WiFi laptopmu (contoh: 192.168.1.5)
+  // Menjalankan Flutter di Emulator Android, 
   // static const String baseUrl = 'http://10.0.2.2:8000/api'; // Untuk Android Studio
   static const String baseUrl = 'http://192.168.1.11:8000/api'; //HP
 
   // Kunci rahasia untuk menyimpan token di brankas HP
   static const String _tokenKey = 'jwt_token';
 
-  /// Fungsi untuk melakukan Login
+  /// Fungsi untuk Login
   Future<Map<String, dynamic>> login(String email, String password) async {
     final url = Uri.parse('$baseUrl/login');
 
@@ -37,8 +35,7 @@ class ApiService {
 
         final prefs = await SharedPreferences.getInstance();
         
-        // Kita gunakan operator kustom agar aman jika struktur JSON Laravel-mu
-        // berbentuk data['user']['name'] atau langsung data['user_name']
+        // gunakan operator kustom agar aman jika struktur JSON Laravel
         String namaStaf = 'Staf Gudang';
         if (data['user'] != null && data['user']['name'] != null) {
           namaStaf = data['user']['name'];
@@ -65,7 +62,7 @@ class ApiService {
     await prefs.setString(_tokenKey, token);
   }
 
-  /// Fungsi untuk mengambil token (akan digunakan saat hitung cycle count nanti)
+  /// Fungsi untuk mengambil token (akan digunakan saat hitung cycle count)
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_tokenKey);
@@ -87,8 +84,7 @@ class ApiService {
   Future<Map<String, dynamic>> pullMasterData() async {
     final token = await getToken();
     
-    // Sesuaikan URL ini dengan yang ada di routes/api.php Laravel-mu
-    // Misalnya route-nya: Route::get('/sync/pull', [SyncController::class, 'pullMasterData']);
+    // Pull Data Rak & Item
     final url = Uri.parse('$baseUrl/sync/pull'); 
 
     try {
@@ -105,7 +101,6 @@ class ApiService {
       }
       return {'racks': [], 'items': []};
     } catch (e) {
-      // TAMBAHKAN BARIS INI UNTUK MELIHAT ERROR ASLINYA
       print('============= ERROR API =============');
       print(e.toString());
       print('=====================================');
@@ -119,7 +114,7 @@ class ApiService {
     final token = await getToken();
     final url = Uri.parse('$baseUrl/sync/push');
 
-    print('📦 ISI PAKET YANG DIBAWA KURIR KE LARAVEL:');
+    print('ISI YANG DIBAWA KE LARAVEL:');
     print(jsonEncode({'cycle_counts': cycleCounts}));
     print('===========================================');
 
@@ -132,15 +127,14 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'cycle_counts': cycleCounts, // Format array yang ditunggu Laravel
+          'cycle_counts': cycleCounts, // Format array 
         }),
       );
 
       if (response.statusCode == 200) {
         return true; // Berhasil
       } else {
-        // --- KODE YANG DIUBAH ---
-        // Kita tangkap pesan error asli dari Laravel (misal error validasi atau 400/500)
+        // Tangkap pesan error asli dari Laravel
         String errorMessage = 'Gagal mengirim data ke server.';
         try {
           final errorData = jsonDecode(response.body);
@@ -150,19 +144,18 @@ class ApiService {
             errorMessage = errorData['message'];
           }
         } catch (_) {
-          // Kalau response Laravel bukan JSON (misal error HTML 500), pakai pesan default
+          // Kalau response Laravel bukan JSON, pakai pesan default
         }
 
-        print('=== ERROR DARI LARAVEL ===');
+        print('ERROR DARI LARAVEL');
         print('Status: ${response.statusCode}');
         print('Pesan: ${response.body}');
         
-        // Kita "lempar" errornya ke UI agar SnackBar tahu pesannya apa
+        // Lempar errornya ke UI agar SnackBar tahu pesannya apa
         throw Exception(errorMessage); 
-        // --- AKHIR KODE YANG DIUBAH ---
       }
     } catch (e) {
-      // Ubah return false menjadi throw exception agar pesan errornya sampai ke pengguna
+      // Ubah return false menjadi throw exception agar pesan errornya sampai ke user
       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
@@ -190,7 +183,7 @@ class ApiService {
         final data = json.decode(response.body);
         return data['my_tasks'] ?? [];
       } else {
-        // TAMBAHKAN DUA BARIS INI UNTUK MENGINTIP ERROR ASLI LARAVEL
+        // Untuk debug
         print('STATUS CODE LARAVEL: ${response.statusCode}');
         print('PESAN DARI LARAVEL: ${response.body}');
         throw Exception('Gagal memuat tugas');

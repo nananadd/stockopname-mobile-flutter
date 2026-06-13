@@ -83,10 +83,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       backgroundColor: bgLight,
       
-      // Konten layar akan berubah sesuai index menu bawah
+      // Konten layar berubah sesuai index menu bawah
       body: pages[_selectedIndex],
       
-      // BOTTOM NAVIGATION BAR (Gaya UI Modern)
+      // BOTTOM NAVIGATION BAR
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
@@ -131,14 +131,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ========================================================
-  // WIDGET KHUSUS TAB BERANDA (Tampilan Home Asli)
-  // ========================================================
+  // WIDGET KHUSUS TAB BERANDA
   Widget _buildHomeTab() {
     return SafeArea(
       child: Column(
         children: [
-          // HEADER STICKY (Akan tetap menempel di atas)
+          // HEADER STICKY
           _buildCustomHeader(context),
           
           // AREA KONTEN (Bisa di-scroll dan di-pull-to-refresh)
@@ -215,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // WIDGET TAMPILAN TUGAS (Tidak Diubah)
+  // WIDGET TAMPILAN TUGAS
   Widget _buildTaskList() {
     if (isLoading) {
       return const Center(
@@ -345,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // HEADER STICKY (Tidak Diubah)
+  // HEADER STICKY
   Widget _buildCustomHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24.0),
@@ -395,7 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // FUNGSI LOGOUT (Tidak Diubah)
+  // FUNGSI LOGOUT
   Future<void> _prosesLogout(BuildContext context) async {
     bool confirm = await showDialog(
       context: context,
@@ -433,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // HERO CARD (Tidak Diubah)
+  // HERO CARD
   Widget _buildHeroCard(BuildContext context) {
     return InkWell(
       onTap: () {
@@ -506,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     int totalTasks = myTasks.length;
     
-    // Menghitung otomatis tugas yang sudah selesai (asumsi status 'completed', 'counted', atau 'done')
+    // Menghitung otomatis tugas yang sudah selesai
     int completedTasks = myTasks.where((task) {
       String status = task['status'] ?? '';
       return status == 'completed' || status == 'counted' || status == 'done';

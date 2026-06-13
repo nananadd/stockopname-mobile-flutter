@@ -67,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgLight, // Background abu-abu muda ala Sigma
+      backgroundColor: bgLight, // Background abu-abu muda
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 1. LOGO
+                // LOGO
                 Image.asset(
                   'assets/LogoSigmaWhite520x129.webp',
                   height: 120,
@@ -89,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // 3. KOTAK FORM (Floating Card)
+                // KOTAK FORM (Floating Card)
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -157,11 +157,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       // Tombol Login
                       SizedBox(
                         width: double.infinity,
-                        height: 55, // Tombol lebih tinggi biar enak ditekan
+                        height: 55,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _login,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: sigmaBlack, // Tombol hitam elegan
+                            backgroundColor: sigmaBlack,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
