@@ -73,7 +73,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   itemCount: _history.length,
                   itemBuilder: (context, index) {
                     final item = _history[index];
-                    final bool isSynced = item['status'] == 'synced';
+                    final bool isSynced = item['status'] != 'pending';
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),

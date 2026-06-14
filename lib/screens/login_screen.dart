@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'home_screen.dart';
 
+// KUNCI 1: Jangan lupa import Database Helper-mu di sini
+// (Sesuaikan path folder-nya jika berbeda)
+import '../database/sqlite_helper.dart'; 
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -32,20 +36,37 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() {
-      _isLoading = true;
+      _isLoading = true; // Nyalakan loading spinner
     });
 
-    // Panggil fungsi API
+    // 1. Panggil API Login
     final result = await _apiService.login(
       _emailController.text,
       _passwordController.text,
     );
 
-    setState(() {
-      _isLoading = false;
-    });
-
     if (result['success']) {
+      //  alankan fungsi tarik data sebelum pindah ke HomeScreen
+      try {
+        final masterData = await _apiService.pullMasterData(); 
+
+        // Simpan semua data yang ditarik ke dalam SQLite lokal
+        await DatabaseHelper.instance.insertRacks(masterData['racks'] ?? []);
+        await DatabaseHelper.instance.insertItems(masterData['items'] ?? []);
+        await DatabaseHelper.instance.insertRecountTasks(masterData['my_tasks'] ?? []);
+        
+        // Simpan riwayat khusus staf ini
+        if (masterData['my_history'] != null) {
+          await DatabaseHelper.instance.insertHistoryTasks(masterData['my_history']);
+        }
+      } catch (e) {
+        debugPrint("Gagal Auto-Pull Data: $e");
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -53,6 +74,10 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } else {
+      setState(() {
+        _isLoading = false;
+      });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -67,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgLight, // Background abu-abu muda
+      backgroundColor: bgLight, 
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -89,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 40),
 
-                // KOTAK FORM (Floating Card)
+                // KOTAK FORM
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(

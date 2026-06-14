@@ -17,11 +17,11 @@ class _SyncScreenState extends State<SyncScreen> {
   bool _isLoading = false;
   String _statusMessage = 'Pilih aksi sinkronisasi di bawah ini.';
 
-  // Fungsi Pull (Download)
+  // pull data master
   Future<void> _startPull() async {
     setState(() {
       _isLoading = true;
-      _statusMessage = 'Mengunduh Master Data (Rak & Item)...';
+      _statusMessage = 'Mengunduh Master Data & Jadwal Tugas...';
     });
 
     try {
@@ -31,17 +31,24 @@ class _SyncScreenState extends State<SyncScreen> {
       final masterData = await api.pullMasterData();
       final racks = masterData['racks'] ?? [];
       final items = masterData['items'] ?? [];
+      final myTasks = masterData['my_tasks'] ?? [];
+      final myHistory = masterData['my_history'] ?? [];
 
+      // Bersihkan data lama, lalu masukkan data terbaru
       await db.clearMasterData();
       await db.insertRacks(racks);
       await db.insertItems(items);
+      await db.insertRecountTasks(myTasks);
+      
+      if (myHistory.isNotEmpty) {
+        await db.insertHistoryTasks(myHistory);
+      }
 
-      // Cek halaman masih aktif sebelum merubah tampilan
       if (!mounted) return;
 
       setState(() {
         _isLoading = false;
-        _statusMessage = 'Download Berhasil!\nTotal: ${racks.length} Rak dan ${items.length} Item.';
+        _statusMessage = 'Download Berhasil!\nTotal: ${racks.length} Rak, ${myTasks.length} Tugas.';
       });
       
     } catch (e) {
@@ -49,12 +56,12 @@ class _SyncScreenState extends State<SyncScreen> {
       
       setState(() {
         _isLoading = false;
-        _statusMessage = 'Download Gagal. Pastikan internet menyala.';
+        _statusMessage = 'Download Gagal. Pastikan koneksi internet menyala.';
       });
     }
   }
 
-// FUNGSI : Push (Upload) hasil hitungan ke Laravel
+  // push data
   Future<void> _startPush() async {
     setState(() {
       _isLoading = true;
@@ -77,56 +84,73 @@ class _SyncScreenState extends State<SyncScreen> {
         return;
       }
 
-      // PROSES BERISHKAN ID 
+      // PROSES BERSIHKAN ID 
       List<Map<String, dynamic>> dataUntukDikirim = [];
 
       for (var item in rawPendingData) {
-        // Map dari SQLite itu "read-only", jadi harus buat salinannya agar bisa diedit
         Map<String, dynamic> cycleData = Map<String, dynamic>.from(item);
         
-        // HAPUS ID LOKAL bawaan SQLite agar Laravel tidak menolaknya (422 Invalid ID)
+        // Hapus ID lokal agar Laravel membuatkan ID baru
         cycleData.remove('id'); 
-
         dataUntukDikirim.add(cycleData);
       }
 
       if (!mounted) return;
       setState(() => _statusMessage = 'Mengirim ${dataUntukDikirim.length} laporan ke server...');
 
-      // Kirim data yang sudah "dibersihkan" ke Laravel
+      // Kirim data ke Laravel
       await api.pushCycleCount(dataUntukDikirim);
 
-      // Jika sukses, ubah status di SQLite jadi 'synced' menggunakan ID aslinya
+      // Ubah status di SQLite jadi 'synced'
       List<int> syncedIds = rawPendingData.map<int>((e) => e['id'] as int).toList();
       await db.markAsSynced(syncedIds);
+
+      if (!mounted) return;
+      setState(() => _statusMessage = 'Upload sukses! Memperbarui riwayat tugas...');
+
+      // auto pull setelah upload
+      try {
+        final masterData = await api.pullMasterData();
+        final racks = masterData['racks'] ?? [];
+        final items = masterData['items'] ?? [];
+        final myTasks = masterData['my_tasks'] ?? [];
+        final myHistory = masterData['my_history'] ?? [];
+
+        await db.clearMasterData();
+        await db.insertRacks(racks);
+        await db.insertItems(items);
+        await db.insertRecountTasks(myTasks);
+        if (myHistory.isNotEmpty) {
+          await db.insertHistoryTasks(myHistory);
+        }
+      } catch (pullError) {
+        debugPrint("Auto-pull gagal, tapi upload sudah sukses: $pullError");
+      }
 
       if (!mounted) return;
 
       setState(() {
         _isLoading = false;
-        _statusMessage = 'Upload Berhasil!\n${rawPendingData.length} laporan telah masuk ke sistem pusat.';
+        _statusMessage = 'Upload & Sinkronisasi Berhasil!\nData layar Beranda dan Riwayat sudah up-to-date.';
       });
 
-      // Munculkan pop-up hijau berhasil
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Berhasil Upload ke Pusat!'), backgroundColor: Colors.green),
+        const SnackBar(content: Text('Selesai! Data berhasil masuk ke pusat.'), backgroundColor: Colors.green),
       );
 
     } catch (e) {
       if (!mounted) return;
       
-      // JIKA GAGAL: Tangkap pesan error spesifik dari Laravel
       setState(() {
         _isLoading = false;
         _statusMessage = 'Upload Gagal. Cek pesan error di bagian bawah layar.';
       });
 
-      // Munculkan pop-up merah dengan pesan error aslinya
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Gagal: $e'), 
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5), // Ditahan 5 detik biar staf bisa baca
+          duration: const Duration(seconds: 5), 
         ),
       );
     }
@@ -187,7 +211,7 @@ class _SyncScreenState extends State<SyncScreen> {
                       // TOMBOL DOWNLOAD
                       ElevatedButton.icon(
                         icon: const Icon(Icons.cloud_download_outlined),
-                        label: const Text('Download Data Master', style: TextStyle(fontWeight: FontWeight.bold)),
+                        label: const Text('Tarik Data Master & Jadwal', style: TextStyle(fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: sigmaBlack,

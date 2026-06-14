@@ -9,7 +9,6 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  // Tema Warna Konsisten WMS Sigma
   final Color sigmaBlack = const Color(0xFF111111);
   final Color sigmaMagenta = const Color(0xFFF31A6B);
   final Color bgLight = const Color(0xFFF4F6F9);
@@ -40,7 +39,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    // Tembak API Laravel
+    // API Laravel
     final result = await ApiService().changePassword(
       _currentPasswordController.text,
       _newPasswordController.text,

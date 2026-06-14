@@ -97,6 +97,17 @@ class DatabaseHelper {
     await db.delete('cycle_counts', where: 'status = ?', whereArgs: ['recount']);
   }
 
+  /// Fungsi untuk menghapus SEMUA data di HP saat staf Logout
+  Future<void> clearAllData() async {
+    final db = await instance.database;
+    
+    await db.delete('racks');
+    await db.delete('items');
+    await db.delete('item_rack');
+    await db.delete('cycle_counts');
+    await db.delete('cycle_count_details');
+  }
+
   /// Fungsi untuk menyimpan banyak Rak sekaligus
   Future<void> insertRacks(List<dynamic> racks) async {
     final db = await instance.database;
@@ -186,7 +197,7 @@ class DatabaseHelper {
   /// Ambil semua Cycle Count yang statusnya masih 'pending'
   Future<List<Map<String, dynamic>>> getPendingCycleCounts() async {
     final db = await instance.database;
-    
+
     final List<Map<String, dynamic>> pendingCounts = await db.query(
       'cycle_counts',
       where: 'status = ?',
@@ -241,7 +252,31 @@ class DatabaseHelper {
       SELECT c.*, r.code as rack_code 
       FROM cycle_counts c
       LEFT JOIN racks r ON c.rack_id = r.id
+      WHERE c.id IN (
+          SELECT MAX(id) 
+          FROM cycle_counts 
+          GROUP BY rack_id
+      )
       ORDER BY c.started_at DESC
     ''');
+  }
+
+  /// Ambil Riwayat Hitungan untuk ditampilkan di UI
+  Future<void> insertHistoryTasks(List<dynamic> histories) async {
+    final db = await instance.database;
+    Batch batch = db.batch();
+
+    for (var history in histories) {
+      batch.insert('cycle_counts', {
+        'id': history['id'],
+        'rack_id': history['rack_id'],
+        'status': history['status'],
+        'notes': history['notes'] ?? '',
+        'started_at': history['started_at'] ?? '',
+        'finished_at': history['finished_at'] ?? '',
+        'is_synced': 1 // Pastikan statusnya sudah tersinkron
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
   }
 }

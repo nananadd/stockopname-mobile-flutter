@@ -6,6 +6,7 @@ import 'cycle_count_screen.dart';
 import 'history_screen.dart';
 import 'change_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../database/sqlite_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -424,9 +425,14 @@ class _HomeScreenState extends State<HomeScreen> {
     ) ?? false;
 
     if (confirm) {
+      // Hapus Sesi / Token dari SharedPreferences
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       
+      // Menghapus seluruh rak, barang, dan tugas staf sebelumnya
+      await DatabaseHelper.instance.clearAllData();
+      
+      // Arahkan kembali ke halaman Login
       if (mounted) {
         Navigator.pushReplacement(
           context,
