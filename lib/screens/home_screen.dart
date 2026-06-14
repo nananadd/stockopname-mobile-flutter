@@ -224,7 +224,14 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    if (myTasks.isEmpty) {
+    // saring datanya, masukkan draft dan recount aja
+    final List<dynamic> visibleTasks = myTasks.where((task) {
+      String status = (task['status'] ?? '').toString().toLowerCase();
+      return status == 'draft' || status == 'recount';
+    }).toList();
+
+    // cek data kosong
+    if (visibleTasks.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -237,16 +244,16 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Icon(Icons.check_circle_outline, color: Colors.green, size: 40),
             SizedBox(height: 10),
-            Text('Tidak ada jadwal hari ini.', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('Tidak ada jadwal hitung yang tersisa.', style: TextStyle(fontWeight: FontWeight.bold)),
             Text('Gudang aman terkendali!', style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
       );
     }
 
-    // Jika ada tugas, buat list card
+    // render tugas
     return Column(
-      children: myTasks.map((task) {
+      children: visibleTasks.map((task) {
         final rackCode = task['rack']?['code'] ?? 'Rak Tidak Diketahui';
         final scheduleDate = task['scheduled_at'] ?? '-';
         final status = task['status'] ?? 'draft';
@@ -278,23 +285,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: isRecount ? Colors.red : Colors.orange
                   ),
                 ),
-                title: Text(
-                  rackCode,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-                ),
+                title: Text(rackCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 subtitle: Text(
                   isRecount ? 'Tugas Hitung Ulang!' : 'Jadwal: $scheduleDate',
                   style: TextStyle(fontSize: 12, color: isRecount ? Colors.red : Colors.grey, fontWeight: isRecount ? FontWeight.bold : FontWeight.normal)
                 ),
                 trailing: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final String targetRackId = task['rack_id'].toString();
-                    Navigator.push(
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => CycleCountScreen(initialRackId: targetRackId)
                       )
                     );
+                    _fetchTasks();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isRecount ? Colors.red : sigmaMagenta,
@@ -497,29 +502,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // MINI DASHBOARD & PROGRESS TUGAS
+  // MINI DASHBOARD & TUGAS
   Widget _buildProgressDashboard() {
-    // Sembunyikan jika masih loading atau tidak ada tugas
     if (isLoading || myTasks.isEmpty) return const SizedBox.shrink();
-
+    
     int totalTasks = myTasks.length;
     
-    // Menghitung otomatis tugas yang sudah selesai
+    // Hitung sebagai 'Selesai' jika statusnya submitted, reviewed, atau approved
     int completedTasks = myTasks.where((task) {
-      String status = task['status'] ?? '';
-      return status == 'completed' || status == 'counted' || status == 'done';
+      String status = (task['status'] ?? '').toString().toLowerCase();
+      return status == 'submitted' || 
+             status == 'reviewed' || 
+             status == 'approved';
     }).length;
-    
+
     int pendingTasks = totalTasks - completedTasks;
-    double progressValue = totalTasks == 0 ? 0 : completedTasks / totalTasks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Ringkasan Aktivitas',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
-        ),
+        const Text('Ringkasan Aktivitas', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(20),
@@ -527,81 +529,46 @@ class _HomeScreenState extends State<HomeScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.02), 
-                blurRadius: 10, 
-                offset: const Offset(0, 4)
-              )
+              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
             ]
           ),
-          child: Column(
+          child: Row(
             children: [
-              // Teks Progress dan Persentase
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Progress Hari Ini', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(
-                    '${(progressValue * 100).toInt()}%', 
-                    style: TextStyle(fontWeight: FontWeight.bold, color: sigmaMagenta, fontSize: 16)
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.green.withOpacity(0.2))
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              
-              // Garis Loading (Progress Bar)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(
-                  value: progressValue,
-                  minHeight: 8,
-                  backgroundColor: Colors.grey.shade200,
-                  valueColor: AlwaysStoppedAnimation<Color>(sigmaMagenta),
+                  child: Column(
+                    children: [
+                      Text(completedTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+                      const SizedBox(height: 4),
+                      const Text('Selesai', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
                 ),
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Dua Kotak Statistik (Selesai vs Menunggu)
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.green.withOpacity(0.2))
-                      ),
-                      child: Column(
-                        children: [
-                          Text(completedTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
-                          const SizedBox(height: 4),
-                          const Text('Selesai', style: TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange.withOpacity(0.2))
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.orange.withOpacity(0.2))
-                      ),
-                      child: Column(
-                        children: [
-                          Text(pendingTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange)),
-                          const SizedBox(height: 4),
-                          const Text('Menunggu', style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
+                  child: Column(
+                    children: [
+                      Text(pendingTasks.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange)),
+                      const SizedBox(height: 4),
+                      const Text('Menunggu', style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w600)),
+                    ],
                   ),
-                ],
-              )
+                ),
+              ),
             ],
           ),
         )

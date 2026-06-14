@@ -31,12 +31,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
   }
 
-  // Fungsi untuk memformat tanggal agar enak dibaca (contoh: 26 Mar 2026, 14:30)
-  String _formatDate(String isoString) {
+  // Fungsi untuk memformat tanggal
+  String _formatDate(String? isoString) {
+    // jika datanya kosong (null)
+    if (isoString == null || isoString.isEmpty) return 'Belum selesai';
+    
     try {
       final date = DateTime.parse(isoString);
-      // pakai cara sederhana bawaan DateTime dulu
-      return '${date.day}-${date.month}-${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+      // Format otomatis
+      return DateFormat('dd MMM yyyy, HH:mm').format(date);
     } catch (e) {
       return isoString;
     }

@@ -3,10 +3,8 @@ import '../database/sqlite_helper.dart';
 import 'package:barcode_scan2/barcode_scan2.dart';
 
 class CycleCountScreen extends StatefulWidget {
-  // Tambah variabel penampung ID Rak
   final String? initialRackId; 
   
-  // Masukkan ke dalam constructor
   const CycleCountScreen({super.key, this.initialRackId}); 
 
   @override
@@ -19,10 +17,14 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   final Color sigmaMagenta = const Color(0xFFF31A6B);
   final Color bgLight = const Color(0xFFF4F6F9);
 
-  bool _isRackLocked = false; // Variabel baru untuk mengunci dropdown
+  bool _isRackLocked = false;
+  
+  // Variabel untuk menampung pesan hitung ulang
+  bool _isRecount = false;
+  String _spvNote = '';
 
   List<Map<String, dynamic>> _racks = [];
-  List<Map<String, dynamic>> _items = []; // Awalnya kosong
+  List<Map<String, dynamic>> _items = [];
   String? _selectedRackId;
   
   final Map<String, TextEditingController> _controllers = {};
@@ -31,10 +33,9 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
   @override
   void initState() {
     super.initState();
-    _loadRacksOnly(); // Hanya load rak saat halaman dibuka
+    _loadRacksOnly();
   }
 
-  // Load Rak saja
   Future<void> _loadRacksOnly() async {
     final db = await DatabaseHelper.instance.database;
     final racks = await db.query('racks');
@@ -42,19 +43,15 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       _racks = racks;
     });
 
-    // CEK TITIPAN DARI HOME SCREEN
     if (widget.initialRackId != null) {
-      // Cek apakah rak dari jadwal online ADA di database offline HP
       bool isRackExist = _racks.any((r) => r['id'].toString() == widget.initialRackId);
-
       if (isRackExist) {
         setState(() {
           _selectedRackId = widget.initialRackId;
-          _isRackLocked = true; // Kunci dropdown
+          _isRackLocked = true; 
         });
         _loadItemsForRack(widget.initialRackId!);
       } else {
-        // Jika rak tidak ada di HP, munculkan peringatan dan kembalikan ke Home!
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -63,29 +60,44 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
               duration: Duration(seconds: 4),
             ),
           );
-          Navigator.pop(context); // Tendang balik ke Home
+          Navigator.pop(context); 
         }
       }
     }
   }
 
-  // Load Item berdasarkan Rak yang dipilih
+  // Load Item sekaligus mengecek status Recount
   Future<void> _loadItemsForRack(String rackId) async {
+    final db = await DatabaseHelper.instance.database;
+    
+    // Cek tugas Recount
+    final recountTask = await db.query(
+      'cycle_counts',
+      where: 'rack_id = ? AND status = ?',
+      whereArgs: [int.parse(rackId), 'recount'],
+      limit: 1,
+    );
+
     final itemsData = await DatabaseHelper.instance.getItemsByRack(int.parse(rackId));
     
     setState(() {
-      // pakai List.from() agar daftarnya jadi Growable (Bisa ditambah)
       _items = List<Map<String, dynamic>>.from(itemsData); 
+      
+      if (recountTask.isNotEmpty) {
+        _isRecount = true;
+        _spvNote = recountTask.first['notes']?.toString() ?? 'Hitung ulang rak ini.';
+      } else {
+        _isRecount = false;
+        _spvNote = '';
+      }
     });
 
-    _controllers.clear(); // Bersihkan form sebelumnya
+    _controllers.clear(); 
     for (var item in _items) {
       _controllers[item['id'].toString()] = TextEditingController();
     }
   }
 
-
- // Fungsi simpan (sudah diperbaiki dengan system_stock_snapshot)
   Future<void> _saveOffline() async {
     if (_selectedRackId == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih Rak dulu!'), backgroundColor: Colors.red));
@@ -96,7 +108,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       return;
     }
 
-    // Pastikan ada minimal 1 barang yang diisi angkanya
     bool hasInput = false;
     for (var controller in _controllers.values) {
       if (controller.text.isNotEmpty) {
@@ -113,26 +124,41 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
 
     final db = await DatabaseHelper.instance.database;
-    int cycleId = await db.insert('cycle_counts', {
-      'rack_id': _selectedRackId,
-      'status': 'pending',
-      'started_at': _startedAt.toIso8601String(),
-      'finished_at': DateTime.now().toIso8601String(),
-    });
+    
+    // Pakai Transaksi agar lebih aman
+    await db.transaction((txn) async {
+      // Simpan header ke 'pending'
+      int cycleId = await txn.insert('cycle_counts', {
+        'rack_id': _selectedRackId,
+        'status': 'pending', // Status jadi pending agar siap diupload
+        'started_at': _startedAt.toIso8601String(),
+        'finished_at': DateTime.now().toIso8601String(),
+      });
 
-    for (var item in _items) {
-      String itemId = item['id'].toString();
-      String inputQty = _controllers[itemId]?.text ?? '';
-      
-      if (inputQty.isNotEmpty) {
-        await db.insert('cycle_count_details', {
-          'cycle_count_id': cycleId,
-          'item_id': item['id'],
-          'system_stock_snapshot': item['system_stock'] ?? 0, 
-          'physical_stock': int.parse(inputQty),
-        });
+      // Simpan detail barang
+      for (var item in _items) {
+        String itemId = item['id'].toString();
+        String inputQty = _controllers[itemId]?.text ?? '';
+        
+        if (inputQty.isNotEmpty) {
+          await txn.insert('cycle_count_details', {
+            'cycle_count_id': cycleId,
+            'item_id': item['id'],
+            'system_stock_snapshot': item['system_stock'] ?? 0, 
+            'physical_stock': int.parse(inputQty),
+          });
+        }
       }
-    }
+
+      // Jika berasal dari tugas recount, HAPUS tugas recount lama agar tidak numpuk
+      if (_isRecount) {
+        await txn.delete(
+          'cycle_counts',
+          where: 'rack_id = ? AND status = ?',
+          whereArgs: [int.parse(_selectedRackId!), 'recount']
+        );
+      }
+    });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hitungan berhasil disimpan Offline!'), backgroundColor: Colors.green));
@@ -140,33 +166,28 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     }
   }
 
-  // fungsi Dialog Tambah Barang Nyasar (Misplaced Item)
   Future<void> _showAddMisplacedItemDialog() async {
     TextEditingController searchController = TextEditingController();
     List<Map<String, dynamic>> searchResults = [];
     bool isSearching = false;
 
-    // Fungsi untuk mencari ke SQLite (Berdasarkan Nama atau SKU)
     Future<void> performSearch(String keyword, Function setModalState) async {
       if (keyword.isEmpty) return;
       setModalState(() => isSearching = true);
       
       final db = await DatabaseHelper.instance.database;
-      // Cari barang yang mirip dengan ketikan staf
       final results = await db.query(
         'items',
         where: 'name LIKE ? OR sku LIKE ?',
         whereArgs: ['%$keyword%', '%$keyword%'],
-        limit: 10, // Batasi 10 agar tidak berat
+        limit: 10, 
       );
-
       setModalState(() {
         searchResults = results;
         isSearching = false;
       });
     }
 
-    // Tampilkan menu dari bawah layar
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -191,7 +212,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                   const Text('Cari berdasarkan Nama atau SKU:', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 16),
                   
-                  // Kotak Pencarian
                   Row(
                     children: [
                       Expanded(
@@ -208,7 +228,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Tombol Scan Khusus untuk Dialog ini
                       Container(
                         decoration: BoxDecoration(color: sigmaBlack, borderRadius: BorderRadius.circular(12)),
                         child: IconButton(
@@ -217,12 +236,10 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                             try {
                               var result = await BarcodeScanner.scan();
                               if (result.type == ResultType.Barcode) {
-                                searchController.text = result.rawContent; // Isi otomatis ke textfield
-                                performSearch(result.rawContent, setModalState); // Langsung cari
+                                searchController.text = result.rawContent;
+                                performSearch(result.rawContent, setModalState);
                               }
-                            } catch (e) {
-                              // Abaikan jika batal scan
-                            }
+                            } catch (e) {}
                           },
                         ),
                       ),
@@ -230,7 +247,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Daftar Hasil Pencarian
                   if (isSearching)
                     const Center(child: CircularProgressIndicator())
                   else if (searchResults.isNotEmpty)
@@ -253,23 +269,17 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                                 ),
                                 onPressed: () {
-                                  // --- PROSES PENAMBAHAN KE LAYAR UTAMA ---
-                                  // Cek dulu apakah barang ini sudah ada di layar?
                                   bool alreadyExists = _items.any((i) => i['id'] == item['id']);
-                                  
                                   if (alreadyExists) {
                                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang sudah ada di daftar rak ini!'), backgroundColor: Colors.orange));
                                   } else {
-                                    // Masukkan ke layar utama
                                     setState(() {
-                                      // Kunci Penting: Barang nyasar system_stock-nya kita anggap 0 di rak ini!
                                       Map<String, dynamic> newItem = Map<String, dynamic>.from(item);
                                       newItem['system_stock'] = 0; 
-                                      
                                       _items.add(newItem);
                                       _controllers[item['id'].toString()] = TextEditingController();
                                     });
-                                    Navigator.pop(context); // Tutup Pop-Up
+                                    Navigator.pop(context);
                                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Barang berhasil ditambahkan!'), backgroundColor: Colors.green));
                                   }
                                 },
@@ -295,21 +305,15 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     );
   }
 
-// Fungsi Buka Kamera dengan barcode_scan2
   Future<void> _scanQR() async {
     try {
       var result = await BarcodeScanner.scan();
-      
       if (result.type == ResultType.Barcode) {
-        // Gunakan trim() untuk membuang spasi gaib dari kamera
-        String hasilScan = result.rawContent.trim(); 
-
-        // 1. CEK: APAKAH INI QR CODE RAK?
+        String hasilScan = result.rawContent.trim();
         final matchedRack = _racks.firstWhere(
           (rack) => rack['qr_code'] == hasilScan || rack['code'] == hasilScan,
           orElse: () => {}, 
         );
-
         if (matchedRack.isNotEmpty) {
           setState(() {
             _selectedRackId = matchedRack['id'].toString();
@@ -318,62 +322,41 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Rak dipilih: ${matchedRack['code']}'), backgroundColor: Colors.green)
           );
-          return; // Hentikan fungsi di sini karena ini adalah Rak
+          return; 
         }
 
-        // 2. JIKA BUKAN RAK: CARI APAKAH INI BARCODE BARANG
         final db = await DatabaseHelper.instance.database;
-        
-        // // DEBUGGING: Munculkan hasil tangkapan asli kamera ke layar
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //    SnackBar(
-        //      content: Text('Kamera menangkap: "$hasilScan"'), 
-        //      backgroundColor: Colors.blueGrey,
-        //      duration: const Duration(seconds: 5),
-        //    )
-        // );
-
-        // MENGGUNAKAN "LIKE" AGAR TIDAK PEDULI HURUF BESAR/KECIL
         final List<Map<String, dynamic>> matchedItems = await db.query(
           'items',
           where: 'sku LIKE ?', 
           whereArgs: [hasilScan],
         );
-
         if (matchedItems.isNotEmpty) {
           final item = matchedItems.first;
-
-          // KONDISI A: Staf sedang berada di dalam halaman sebuah Rak
           if (_selectedRackId != null) {
-            // Cek apakah barang ini sudah ada di daftar UI bawah
             bool alreadyExists = _items.any((i) => i['id'] == item['id']);
-
             if (alreadyExists) {
                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Barang ${item['name']} sudah ada di daftar bawah!'), backgroundColor: Colors.blue)
                );
             } else {
-               // FITUR ALOKASI: Tambahkan barang ini ke rak sekarang!
                setState(() {
                   Map<String, dynamic> newItem = Map<String, dynamic>.from(item);
-                  newItem['system_stock'] = 0; // Karena baru dialokasikan/nyasar
+                  newItem['system_stock'] = 0; 
                   _items.add(newItem);
                   _controllers[item['id'].toString()] = TextEditingController();
-               });
+                });
                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Berhasil mengalokasikan ${item['name']} ke rak ini!'), backgroundColor: Colors.green)
                );
             }
           } 
-          // KONDISI B: Staf belum memilih Rak sama sekali dari Dropdown
           else {
-            // Cari tahu aslinya barang ini ada di rak mana
             final List<Map<String, dynamic>> rackLocations = await db.rawQuery('''
                SELECT r.id, r.code FROM racks r
                INNER JOIN item_rack ir ON r.id = ir.rack_id
                WHERE ir.item_id = ?
             ''', [item['id']]);
-
             if (rackLocations.isNotEmpty) {
                String rackCode = rackLocations.first['code'];
                String rackId = rackLocations.first['id'].toString();
@@ -381,14 +364,11 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Barang ${item['name']} aslinya di Rak $rackCode. Membuka rak...'), backgroundColor: Colors.blue)
                );
-               
-               // Otomatis pindah ke rak tersebut
                setState(() {
                   _selectedRackId = rackId;
                   _loadItemsForRack(rackId);
                });
             } else {
-               // Kasus Ekstrem: Barang benar-benar belum punya rak di sistem
                ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Barang belum teralokasi! Pilih Rak dari dropdown dulu, lalu scan barang ini untuk mengalokasikannya.'), 
@@ -399,7 +379,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
             }
           }
         } 
-        // 3. JIKA BUKAN RAK DAN BUKAN BARANG
         else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Barcode tidak dikenali sistem!'), backgroundColor: Colors.red)
@@ -421,17 +400,16 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
     super.dispose();
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgLight, // Background abu-abu muda
+      backgroundColor: bgLight, 
       appBar: AppBar(
         title: const Text('Mulai Cycle Count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: sigmaBlack, // Header hitam elegan
+        backgroundColor: sigmaBlack, 
         foregroundColor: Colors.white,
         elevation: 0,
       ),
-      // body: _racks.isEmpty
       body: SafeArea(
         child: _racks.isEmpty
           ? Center(
@@ -481,8 +459,6 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                                 child: Text('${rack['code']}'),
                               );
                             }).toList(),
-                            // KUNCI DROPDOWN
-                            // Jika terkunci, set onChanged jadi null agar tidak bisa diklik
                             onChanged: _isRackLocked 
                                 ? null 
                                 : (value) {
@@ -501,7 +477,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                           child: ElevatedButton(
                             onPressed: _scanQR,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: sigmaBlack, // Tombol scan hitam
+                              backgroundColor: sigmaBlack, 
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                             child: const Icon(Icons.qr_code_scanner, color: Colors.white),
@@ -511,7 +487,44 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Banner notes SPV
+                  if (_isRecount && _spvNote.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.shade300, width: 1.5),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'PERLU HITUNG ULANG!', 
+                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 14)
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '"$_spvNote"',
+                                  style: const TextStyle(color: Colors.black87, fontStyle: FontStyle.italic, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                   const Text('Daftar Barang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
                   const SizedBox(height: 12),
 
@@ -538,11 +551,10 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                                       title: Text(item['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold)),
                                       subtitle: Text('SKU: ${item['sku']}', style: TextStyle(color: sigmaMagenta, fontSize: 12)),
                                       trailing: SizedBox(
-                                        width: 130, // Lebar diperbesar agar muat kotak input & tombol hapus
+                                        width: 130, 
                                         child: Row(
                                           mainAxisAlignment: MainAxisAlignment.end,
                                           children: [
-                                            // Kotak Input Angka Fisik
                                             Expanded(
                                               child: TextField(
                                                 controller: _controllers[itemId],
@@ -561,10 +573,8 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Tombol Hapus Barang (Tempat Sampah)
                                             InkWell(
                                               onTap: () {
-                                                // Logika untuk menghapus barang dari layar
                                                 setState(() {
                                                   _items.removeAt(index);
                                                   _controllers.remove(itemId);
@@ -612,7 +622,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                       margin: const EdgeInsets.only(top: 16, bottom: 24),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: sigmaMagenta, // Warna utama Sigma
+                          backgroundColor: sigmaMagenta, 
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 4,
@@ -625,6 +635,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                 ],
               ),
             ),
-    ));
+      ),
+    );
   }
 }

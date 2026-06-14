@@ -25,7 +25,7 @@ class DatabaseHelper {
   }
 
   Future _createDB(Database db, int version) async {
-    // 1. Tabel Master Rak
+    // Tabel Master Rak
     await db.execute('''
       CREATE TABLE racks (
         id INTEGER PRIMARY KEY,
@@ -34,17 +34,18 @@ class DatabaseHelper {
       )
     ''');
 
-    // 2. Tabel Master Barang (Items)
+    // Tabel Master Barang (Items)
     await db.execute('''
       CREATE TABLE items (
         id INTEGER PRIMARY KEY,
         sku TEXT NOT NULL,
         name TEXT NOT NULL,
-        system_stock INTEGER NOT NULL
+        system_stock INTEGER NOT NULL,
+        unit TEXT
       )
     ''');
 
-    // 3. Tabel Lokasi Barang (Pivot)
+    // Tabel Lokasi Barang (Pivot)
     await db.execute('''
       CREATE TABLE item_rack (
         item_id INTEGER,
@@ -54,19 +55,20 @@ class DatabaseHelper {
       )
     ''');
 
-    // 4. Tabel Header Cycle Count (Draft Offline)
+    // Tabel Header Cycle Count (Draft Offline & Recount)
     await db.execute('''
       CREATE TABLE cycle_counts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY, 
         rack_id INTEGER NOT NULL,
         status TEXT NOT NULL,
-        started_at TEXT NOT NULL,
-        finished_at TEXT NOT NULL,
+        notes TEXT,
+        started_at TEXT,
+        finished_at TEXT,
         is_synced INTEGER DEFAULT 0 
       )
     ''');
 
-    // 5. Tabel Detail Cycle Count (Draft Offline)
+    // Tabel Detail Cycle Count (Draft Offline & Recount Detail)
     await db.execute('''
       CREATE TABLE cycle_count_details (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,6 +91,10 @@ class DatabaseHelper {
     await db.delete('racks');
     await db.delete('items');
     await db.delete('item_rack');
+    
+    // Bersihkan tugas 'recount' lama agar tidak menumpuk
+    // Tapi jangan hapus status 'pending' (hitungan offline staf yang belum di upload)
+    await db.delete('cycle_counts', where: 'status = ?', whereArgs: ['recount']);
   }
 
   /// Fungsi untuk menyimpan banyak Rak sekaligus
@@ -108,7 +114,7 @@ class DatabaseHelper {
           batch.insert('item_rack', {
             'rack_id': rack['id'],
             'item_id': item['id'],
-            'stock_at_location': 0, // Nilai default sementara
+            'stock_at_location': 0, 
           }, conflictAlgorithm: ConflictAlgorithm.ignore);
         }
       }
@@ -126,7 +132,43 @@ class DatabaseHelper {
         'sku': item['sku'] ?? '',
         'name': item['name'] ?? '',
         'system_stock': item['system_stock'] ?? 0,
+        'unit': item['unit'] ?? '',
       }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  // Simpan Tugas Recount
+  Future<void> insertRecountTasks(List<dynamic> recounts) async {
+    final db = await instance.database;
+    Batch batch = db.batch();
+
+    for (var recount in recounts) {
+      // Masukkan Header ke tabel cycle_counts lokal
+      batch.insert('cycle_counts', {
+        'id': recount['id'],
+        'rack_id': recount['rack_id'],
+        'status': 'recount',
+        'notes': recount['notes'] ?? 'Harap hitung ulang rak ini.',
+        'started_at': '', 
+        'finished_at': '',
+        'is_synced': 1
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+      // Jika server menyertakan snapshot barang yang harus dihitung ulang
+      if (recount['details'] != null) {
+        // Hapus detail recount lama untuk ID ini agar tidak duplikat
+        batch.delete('cycle_count_details', where: 'cycle_count_id = ?', whereArgs: [recount['id']]);
+
+        for (var detail in recount['details']) {
+          batch.insert('cycle_count_details', {
+            'cycle_count_id': recount['id'],
+            'item_id': detail['item_id'],
+            'system_stock_snapshot': detail['system_stock_snapshot'] ?? 0,
+            'physical_stock': 0 // Di-reset ke 0 agar staf input fisik yang baru
+          });
+        }
+      }
     }
     await batch.commit(noResult: true);
   }
@@ -141,11 +183,10 @@ class DatabaseHelper {
     ''', [rackId]);
   }
 
-  /// Ambil semua Cycle Count yang statusnya masih 'pending' (belum dikirim)
+  /// Ambil semua Cycle Count yang statusnya masih 'pending'
   Future<List<Map<String, dynamic>>> getPendingCycleCounts() async {
     final db = await instance.database;
     
-    // Ambil header yang pending
     final List<Map<String, dynamic>> pendingCounts = await db.query(
       'cycle_counts',
       where: 'status = ?',
@@ -154,7 +195,6 @@ class DatabaseHelper {
 
     List<Map<String, dynamic>> result = [];
 
-    // Loop setiap header untuk mengambil detail barangnya
     for (var count in pendingCounts) {
       final details = await db.query(
         'cycle_count_details',
@@ -162,15 +202,15 @@ class DatabaseHelper {
         whereArgs: [count['id']],
       );
 
-      // Rangkai sesuai format JSON yang diminta Laravel
       result.add({
-        'id': count['id'], // Disimpan untuk update status nanti
+        'id': count['id'], 
         'rack_id': count['rack_id'],
         'started_at': count['started_at'],
         'finished_at': count['finished_at'],
         'details': details.map((d) => {
           'item_id': d['item_id'],
           'physical_stock': d['physical_stock'],
+          'system_stock_snapshot': d['system_stock_snapshot'], // Ditambahkan agar server tahu snapshot lama
         }).toList(),
       });
     }
@@ -197,7 +237,6 @@ class DatabaseHelper {
   /// Ambil Riwayat Hitungan untuk ditampilkan di UI
   Future<List<Map<String, dynamic>>> getHistory() async {
     final db = await instance.database;
-    // Menggunakan rawQuery untuk JOIN tabel cycle_counts dan racks
     return await db.rawQuery('''
       SELECT c.*, r.code as rack_code 
       FROM cycle_counts c

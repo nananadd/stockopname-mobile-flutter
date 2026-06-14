@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../database/sqlite_helper.dart';
-import 'cycle_count_screen.dart';
 
 class SyncScreen extends StatefulWidget {
   const SyncScreen({super.key});
@@ -37,11 +36,17 @@ class _SyncScreenState extends State<SyncScreen> {
       await db.insertRacks(racks);
       await db.insertItems(items);
 
+      // Cek halaman masih aktif sebelum merubah tampilan
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
         _statusMessage = 'Download Berhasil!\nTotal: ${racks.length} Rak dan ${items.length} Item.';
       });
+      
     } catch (e) {
+      if (!mounted) return;
+      
       setState(() {
         _isLoading = false;
         _statusMessage = 'Download Gagal. Pastikan internet menyala.';
@@ -64,6 +69,7 @@ class _SyncScreenState extends State<SyncScreen> {
       final rawPendingData = await db.getPendingCycleCounts();
 
       if (rawPendingData.isEmpty) {
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
           _statusMessage = 'Tidak ada data hitungan baru yang perlu dikirim.';
@@ -84,15 +90,17 @@ class _SyncScreenState extends State<SyncScreen> {
         dataUntukDikirim.add(cycleData);
       }
 
+      if (!mounted) return;
       setState(() => _statusMessage = 'Mengirim ${dataUntukDikirim.length} laporan ke server...');
 
       // Kirim data yang sudah "dibersihkan" ke Laravel
       await api.pushCycleCount(dataUntukDikirim);
 
-      // Jika sukses, ubah status di SQLite jadi 'synced'
-      // pakai rawPendingData untuk mendapatkan ID lokal SQLite aslinya
+      // Jika sukses, ubah status di SQLite jadi 'synced' menggunakan ID aslinya
       List<int> syncedIds = rawPendingData.map<int>((e) => e['id'] as int).toList();
       await db.markAsSynced(syncedIds);
+
+      if (!mounted) return;
 
       setState(() {
         _isLoading = false;
@@ -100,13 +108,13 @@ class _SyncScreenState extends State<SyncScreen> {
       });
 
       // Munculkan pop-up hijau berhasil
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Berhasil Upload ke Pusat!'), backgroundColor: Colors.green),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Berhasil Upload ke Pusat!'), backgroundColor: Colors.green),
+      );
 
     } catch (e) {
+      if (!mounted) return;
+      
       // JIKA GAGAL: Tangkap pesan error spesifik dari Laravel
       setState(() {
         _isLoading = false;
@@ -114,19 +122,17 @@ class _SyncScreenState extends State<SyncScreen> {
       });
 
       // Munculkan pop-up merah dengan pesan error aslinya
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal: $e'), 
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5), // Ditahan 5 detik biar staf bisa baca
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal: $e'), 
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5), // Ditahan 5 detik biar staf bisa baca
+        ),
+      );
     }
   }
 
-@override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: bgLight,
